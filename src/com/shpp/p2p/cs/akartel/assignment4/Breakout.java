@@ -8,7 +8,16 @@ import java.awt.*;
 import java.awt.event.MouseEvent;
 
 /**
- * Breakout class
+ * This program implements the Breakout game. There are a moving ball, a paddle,
+ * which controlled by user, at the bottom of the game window to reflect the ball,
+ * and some number of colored bricks at the top of the game window, theis number can be changed with constance.
+ * If the ball collides the brick, the brick will be destroyed.
+ * The point is the player have to destroy all the bricks by reflect the ball with the paddle.
+ * At the game start the ball starts from the center of the game window
+ * and moves down with the random angle relatively the bottom line.
+ * If the ball reaches the bottom line - the round ends. If no more bricks left player wins.
+ * if there is at least one brick left and no more turns left - game over.
+ * Some bricks gives various advantages after colliding.
  */
 public class Breakout extends WindowProgram {
     /**
@@ -75,26 +84,43 @@ public class Breakout extends WindowProgram {
      * Number of turns
      */
     private static final int NTURNS = 3;
+    private static final int PAUSE_TIME = 10;
     GArc paddle;
 
     GOval ball;
     double vx, vy; // velocity x and y
-    GLabel gameSpeed, points, gameEnd;
+    GLabel gameSpeed, points, gameEnd, infoRed;
     int speed, game, brickCount = 0;
-    Color someColor, brickColor = new Color(83, 130, 161);
+    Color javaColor = new Color(83, 130, 161);
+    Color brickColor;
     SoundService service = new SoundService();
 
 
     /**
      * paddle x position depend on mouse movement
-     *
      * @param mouseEvent the event to be processed
      */
     @Override
     public void mouseMoved(MouseEvent mouseEvent) {
-        paddle.setLocation(mouseEvent.getX(), getHeight() - PADDLE_Y_OFFSET);
+        paddle.setLocation(mouseEvent.getX() - paddle.getWidth() / 2, getHeight() - PADDLE_Y_OFFSET);
         if (paddle.getX() > getWidth() - paddle.getWidth()) paddle.setLocation(
                 getWidth() - paddle.getWidth(), getHeight() - PADDLE_Y_OFFSET);
+
+        if (paddle.getX() < 0) paddle.setLocation(0, getHeight() - PADDLE_Y_OFFSET);
+    }
+
+    /**
+     * method activate unstoppable mode for ball it becomes red and not bounce from bricks anymore
+     *
+     * @param mouseEvent the event to be processed
+     */
+    @Override
+    public void mouseClicked(MouseEvent mouseEvent) {
+        if (mouseEvent.isShiftDown() && infoRed.getLabel().equals(" Shift + click >>> Unstoppable mode")) {
+            service.playUnstoppableSound();
+            ball.setColor(Color.RED);
+            infoRed.setLabel("");
+        }
     }
 
     /**
@@ -104,7 +130,7 @@ public class Breakout extends WindowProgram {
 
         service.playFightSound();
 
-        labelsInvoke();
+        labelsCreate();
         ballInvoke();
         bricksInvoke();
 
@@ -133,7 +159,7 @@ public class Breakout extends WindowProgram {
      * shows Lose label + sound
      */
     private void loseStatement() {
-        if (brickCount < 100) {
+        if (brickCount < NBRICK_ROWS * NBRICKS_PER_ROW) {
             gameEnd.setLabel("LOOSER !!!");
             gameEnd.setLocation(getWidth() / 2d - gameEnd.getWidth() / 2, getHeight() / 2d);
 
@@ -144,7 +170,12 @@ public class Breakout extends WindowProgram {
     /**
      * create labels
      */
-    private void labelsInvoke() {
+    private void labelsCreate() {
+        infoRed = new GLabel("");
+        labelSettings(infoRed);
+        infoRed.setFont("-24");
+        infoRed.setLocation(0, getHeight() * 2 / 3d);
+
         gameSpeed = new GLabel(speed + " m/s");
         labelSettings(gameSpeed);
         gameSpeed.setLocation(0, gameSpeed.getHeight());
@@ -165,7 +196,7 @@ public class Breakout extends WindowProgram {
      */
     private void labelSettings(GLabel label) {
         label.setFont("-30");
-        label.setColor(someColor);
+        label.setColor(javaColor);
         add(label);
     }
 
@@ -203,6 +234,12 @@ public class Breakout extends WindowProgram {
         }
     }
 
+    /**
+     * bricks color change every second row
+     *
+     * @param i - row
+     * @return color
+     */
     private Color changeBrickColor(int i) {
         switch (i % 10) {
             case 0 -> brickColor = Color.RED;
@@ -225,13 +262,13 @@ public class Breakout extends WindowProgram {
         while (ball.getY() <= getHeight()) {
             wallHit();
             paddleHit();
-            brickHitSomeColor();
+            BrickHitJavaColor();
             brickHit();
             pointsChange();
 
             ball.move(vx, vy);
-            pause(9);
-            if (brickCount == NBRICK_ROWS * NBRICK_ROWS) {
+            pause(PAUSE_TIME);
+            if (brickCount == NBRICK_ROWS * NBRICKS_PER_ROW) {
                 winStatement();
                 break;
             }
@@ -239,8 +276,12 @@ public class Breakout extends WindowProgram {
         }
     }
 
+    /**
+     * play sound case ball lost
+     * excluding game lost - this case will playGameLostSound
+     */
     private void ballLostSound() {
-        if (ball.getY() > getHeight() && game < 2) {
+        if (ball.getY() > getHeight() && game < NTURNS - 1) {
             service.playHolyshitSound();
         }
     }
@@ -256,15 +297,15 @@ public class Breakout extends WindowProgram {
     /**
      * remove brick and add points case brick color == sameColor
      */
-    private void brickHitSomeColor() {
-        if (getCollidingObject() != null && getCollidingObject().getWidth() == BRICK_WIDTH) {
-            if (getCollidingObject().getColor().equals(someColor)) {
+    private void BrickHitJavaColor() {
+        if (getCollidingObject() != null && getCollidingObject().getWidth() == BRICK_WIDTH
+                && getCollidingObject() != paddle) {
+            if (getCollidingObject().getColor().equals(javaColor)) {
                 remove(getCollidingObject());
                 brickCount++;
 
                 service.playBrickSound();
                 if (ball.getColor().equals(Color.BLACK)) {
-                    vx = -vx;
                     vy = -vy;
                 }
             }
@@ -281,16 +322,23 @@ public class Breakout extends WindowProgram {
      * RED - ball become on fire it will not bounce anymore instead just move through bricks and burn
      */
     private void brickHit() {
-        if (getCollidingObject() != null && getCollidingObject().getWidth() == BRICK_WIDTH) {
+        if (getCollidingObject() != null && getCollidingObject().getWidth() == BRICK_WIDTH &&
+                getCollidingObject() != paddle) {
 
             if (getCollidingObject().getColor().equals(Color.CYAN)) {
                 speed += 5;
                 gameSpeed.setLabel(speed + " m/s");
                 vy = vy + vy * 0.05;
+
+           //     if (ball.getColor().equals(Color.BLACK))infoRed.setLabel(" Shift + click >>> Unstoppable mode");
             }
 
             if (getCollidingObject().getColor().equals(Color.GREEN)) {
                 if (paddle.getWidth() < PADDLE_WIDTH * 2) paddle.scale(1.1);
+
+                if (paddle.getX() + paddle.getWidth() > getWidth())
+                    paddle.setLocation(getWidth() - paddle.getWidth(), getHeight() - PADDLE_Y_OFFSET);
+
             }
 
             if (getCollidingObject().getColor().equals(Color.YELLOW)) {
@@ -300,26 +348,21 @@ public class Breakout extends WindowProgram {
             }
 
             if (getCollidingObject() != null && getCollidingObject().getColor().equals(Color.ORANGE)) {
-                getCollidingObject().setColor(someColor);
-
+                getCollidingObject().setColor(javaColor);
                 service.playBrickSound();
             }
 
-            if (getCollidingObject() != null && getCollidingObject().getColor().equals(Color.RED)) {
-                if (ball.getColor().equals(Color.BLACK)) {
-                    service.playUnstoppableSound();
-                }
+            if (getCollidingObject() != null && getCollidingObject().getColor().equals(Color.RED)
+                    && ball.getColor().equals(Color.BLACK))
+                infoRed.setLabel(" Shift + click >>> Unstoppable mode");
 
-                ball.setColor(Color.RED);
-            }
 //bounce from brick only in case ball is black
             if (ball.getColor().equals(Color.BLACK)) {
-                vx = -vx;
                 vy = -vy;
             }
             // removing all bricks ball encounter , exception (Orange and someColor) bricks
             if (getCollidingObject() != null && !(getCollidingObject().getColor().equals(Color.ORANGE) ||
-                    getCollidingObject().getColor().equals(someColor))) {
+                    getCollidingObject().getColor().equals(javaColor))) {
                 remove(getCollidingObject());
                 brickCount++;
 
